@@ -186,18 +186,53 @@ class DatabaseSetup {
     }
     
     /**
+     * Admin sayısını kontrol et ve güvenlik uyarısı ver
+     */
+    public function checkAdminSecurity() {
+        try {
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) as admin_count FROM users WHERE role = 'Admin' AND is_active = 1");
+            $stmt->execute();
+            $result = $stmt->fetch();
+            
+            echo "\n🔐 Admin Güvenlik Durumu:\n";
+            echo str_repeat("-", 40) . "\n";
+            echo "Aktif Admin Sayısı: " . $result['admin_count'] . "\n";
+            
+            if ($result['admin_count'] == 0) {
+                echo "🚨 UYARI: Hiç aktif admin yok! Sistem erişilemez durumda!\n";
+                echo "Acil admin oluşturmanız gerekiyor.\n";
+            } elseif ($result['admin_count'] == 1) {
+                echo "⚠️  DİKKAT: Sadece 1 admin var! Yedek admin oluşturmanız önerilir.\n";
+            } else {
+                echo "✅ Admin güvenliği uygun.\n";
+            }
+            
+            // Admin listesi
+            $stmt = $this->pdo->prepare("SELECT username, job FROM users WHERE role = 'Admin' AND is_active = 1");
+            $stmt->execute();
+            $admins = $stmt->fetchAll();
+            
+            if ($admins) {
+                echo "\n👑 Aktif Adminler:\n";
+                foreach ($admins as $admin) {
+                    echo "• {$admin['username']} ({$admin['job']})\n";
+                }
+            }
+            
+        } catch (PDOException $e) {
+            echo "❌ Admin kontrolü yapılamadı: " . $e->getMessage() . "\n";
+        }
+    }
+
+    /**
      * Admin kullanıcısı oluştur
      */
     public function createAdmin($username = 'admin', $password = 'admin123', $job = 'Rogue') {
         try {
-            // Önce admin var mı kontrol et
-            $stmt = $this->pdo->prepare("SELECT id FROM users WHERE role = 'Admin' LIMIT 1");
+            // Mevcut admin sayısını kontrol et
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) as admin_count FROM users WHERE role = 'Admin' AND is_active = 1");
             $stmt->execute();
-            
-            if ($stmt->fetch()) {
-                echo "⚠️  Admin kullanıcısı zaten mevcut!\n";
-                return false;
-            }
+            $result = $stmt->fetch();
             
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
             
@@ -208,11 +243,14 @@ class DatabaseSetup {
             
             $stmt->execute([$username, $hashedPassword, $job]);
             
+            $newAdminCount = $result['admin_count'] + 1;
+            
             echo "\n✅ Admin kullanıcısı oluşturuldu:\n";
             echo "Kullanıcı Adı: $username\n";
             echo "Şifre: $password\n";
             echo "Sınıf: $job\n";
             echo "Rol: Admin\n";
+            echo "Toplam Admin Sayısı: $newAdminCount\n";
             
             return true;
             
@@ -340,6 +378,9 @@ if (basename(__FILE__) == basename($_SERVER["SCRIPT_NAME"])) {
     try {
         $setup = new DatabaseSetup();
         
+        // Admin güvenlik kontrolü
+        $setup->checkAdminSecurity();
+
         // Sistem sağlık kontrolü
         $setup->healthCheck();
         
